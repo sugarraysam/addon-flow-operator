@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"sync"
 
 	addonsv1alpha1 "github.com/mt-sre/addon-metadata-operator/api/v1alpha1"
 	"github.com/mt-sre/addon-metadata-operator/pkg/utils"
@@ -32,6 +33,7 @@ var (
 	ReferenceAddonImageSetDir   = path.Join(AddonsImagesetDir, "reference-addon")
 	ReferenceAddonIndexImageDir = path.Join(AddonsIndexImageDir, "reference-addon")
 	instance                    *ReferenceAddonStage
+	singletonLock               = sync.Mutex{}
 )
 
 // GetReferenceAddonStage - uses singleton pattern to avoid loading yaml manifests over and over
@@ -39,6 +41,10 @@ var (
 // - (DEPRECATED) static indexImage reference-addon
 // - imageSet reference-addon
 func GetReferenceAddonStage() (*ReferenceAddonStage, error) {
+	// avoids race condition when request singleton in two goroutines
+	singletonLock.Lock()
+	defer singletonLock.Unlock()
+
 	if instance == nil {
 		instance = &ReferenceAddonStage{Env: "stage"}
 		metaIndexImage, err := instance.GetMetadata(false)

@@ -1,6 +1,8 @@
 package validate
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -10,17 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type Validator interface {
-	Name() string
-	Run(utils.MetaBundle) (bool, string, error)
-	SucceedingCandidates() []utils.MetaBundle
-	FailingCandidates() []utils.MetaBundle
-}
-
+// All validators implement the ValidatorTest interface
 // register the validators to test here by appending them to the following slice
-var validatorsToTest []Validator = []Validator{
-	validators.Validator001DefaultChannel{},
+var validatorsToTest []utils.ValidatorTest = []utils.ValidatorTest{
+	validators.ValidatorTest001DefaultChannel{},
+	validators.Validator003CSVNames{},
 	validators.ValidatorAddonLabelTestBundle{},
+	validators.Validator007CSVInstallModes{},
 }
 
 func TestAllValidators(t *testing.T) {
@@ -36,7 +34,7 @@ func TestAllValidators(t *testing.T) {
 				assert.True(t, success, failureMsg)
 			}
 
-			// testing the failing candidates
+			// (optional) testing the failing candidates
 			failingMetaBundles := validator.FailingCandidates()
 			for _, mb := range failingMetaBundles {
 				success, failureMsg, _ := validator.Run(mb)
@@ -62,8 +60,8 @@ func TestFilterDisabledValidators(t *testing.T) {
 			disabled: []string{"001_default_channel"},
 		},
 		{
-			name:     "disable_all",
-			disabled: []string{"001_default_channel", "002_label_format", "003_csv_present"},
+			name:     "disable_three",
+			disabled: []string{"001_default_channel", "002_label_format", "003_csv_names"},
 		},
 	}
 	for _, tc := range cases {
@@ -145,4 +143,27 @@ func TestFilterError(t *testing.T) {
 			require.Nil(t, filter)
 		})
 	}
+}
+
+func TestEnforceAllValidatorsNameUnique(t *testing.T) {
+	t.Parallel()
+	seen := make(map[string]int)
+	for name, validator := range AllValidators {
+		require.Equal(t, name, validator.Name, "Name %v and %v don't match in AllValidators map.", name, validator.Name)
+		seen[name]++
+	}
+	sum := 0
+	for name, count := range seen {
+		require.Equal(t, count, 1, fmt.Sprintf("Validator name %v is not unique.", name))
+
+		parts := strings.SplitN(name, "_", 2)
+		n, err := strconv.Atoi(parts[0])
+		require.NoError(t, err)
+		sum += n
+	}
+	// TODO (sblaisdo) - enable after we sort validators
+	// little math trick to make sure we have an arithmetic sequence of n terms (Gauss)
+	// 1 + 2 + 3 + ... + n = (n * (n + 1)) / 2
+	// n := len(AllValidators)
+	// require.Equal(t, sum, (n*(n+1))/2, "Please make sure validators respect an arithmetic sequence.")
 }
